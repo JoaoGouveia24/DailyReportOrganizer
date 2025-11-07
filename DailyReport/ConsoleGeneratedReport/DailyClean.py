@@ -1,44 +1,19 @@
 import pandas as pd
 
-# === 1. Ler CSV original ===
+#Leitura di ficheiro 1
 df = pd.read_csv("report (REPLACE)/report.csv", sep=";", encoding="latin1")
 
-Erros_Ignorar = ["CIN5505",
-                 "COU6322", #Hoppers vazios
-                 "DSP5322",
-                 "CHQ0004",
-                 "EID5253", #Cartão de cidadão inválido
-                 "DSP5318", #Cassetes vazias
-                 "COU0306", #Valor de moedas não dispensado
-                 "COI0014", #Erro de hardware nas moedas
-                 "CHQ0102", #Nenhuma verificação feita no módulo
-                 "0000000", #Invalid fields
-                 "CHQ0129", #Tamanho de verificação invalido
-                 "0000048", #Timeout autenticação
-                 "RPR5100",
-                 "CIN0014",
-                 "EID5254",
-                 "CHQ0014",
-                 "EID5255",
-                 "BGR5201",
-                 "RPR0123",
-                 "BGR5006",
-                 "RPR0122",
-                 "COI5006",
-                 "0100002",
-                 "0001011",
-                 "0000099",
-                 "EID5252", #Não foi inserido cartão algum
-                 "CHQ0013",
-                 "CHQ0053",
-                 "DSP5307",
-                 "DSP0001",
-                 "CHQ0041"
-                 ]
 
+#Erros a ignorar
+Erros_Ignorar = ["CIN5505","COU6322","DSP5322","CHQ0004","EID5253","DSP5318","COU0306","COI0014","CHQ0102",
+                 "0000000","CHQ0129","0000048","RPR5100","CIN0014","EID5254","CHQ0014","EID5255","BGR5201",
+                 "RPR0123","BGR5006","RPR0122","COI5006","0100002","0001011","0000099","EID5252","CHQ0013",
+                 "CHQ0053","DSP5307","DSP0001","CHQ0041","DSP5301","DSP0302","DSP5362","CHQ5611","EID5250"]
+
+#Remove os erros a ignorar
 df = df[~df["HW Anomalia"].isin(Erros_Ignorar)]
 
-# === 2. Mapa de substituições ===
+#Mapa de substituições
 ProblemWanted = {
     "HW Anomalia": {
         "COI5001": "Encravamento no módulo de moedas",
@@ -60,7 +35,6 @@ ProblemWanted = {
         "CIN5501": "Porta do cofre aberta",
         "DSP5304": "Porta do cofre aberta",
         "CIN5010": "Máquina parada até término da operação do operador",
-        "EID5250": "Leitor cartão cidadão não conectado",
         "BGR5202": "Gaveta de cartões capturados cheia",
         "BGR0200": "Cartão encravado"
     },
@@ -85,23 +59,22 @@ ProblemWanted = {
         "DSP5304": "Verificar a máquina",
         "CIN5501": "Verificar a máquina",
         "CIN5010": "Verificar a máquina",
-        "EID5250": "Verificar a máquina",
         "BGR5202": "Verificar a máquina",
         "BGR0200": "Verificar a máquina"
     }
 }
 
-# Guardar o código original antes de traduzir
+#Guarda as informações originais antes de traduzir
 df["HW_Code"] = df["HW Anomalia"].astype(str).str.strip().str.upper()
 df["Solução"] = df["HW_Code"].map(ProblemWanted["Solução"])
 df["HW Anomalia"] = df["HW_Code"].replace(ProblemWanted["HW Anomalia"])
 
 
-# === 3. Substituir ===
+#Substitui os dados
 df["HW Anomalia"] = df["HW Anomalia"].replace(ProblemWanted["HW Anomalia"])
 df["Solução"] = df["HW Anomalia"].map(ProblemWanted["Solução"]).fillna(df["Solução"])
 
-# === 4. Agrupar por ATM ===
+#Agrupa os dados por VTM
 df["HW Anomalia"] = df["HW Anomalia"].astype(str).fillna("").str.strip()
 df["Solução"] = df["Solução"].astype(str).fillna("").str.strip()
 
@@ -125,9 +98,25 @@ def concat_problemas(df_group):
     return f"{erro} - {solucao_str}"
 
 
-df_agg = df.groupby("Código ATM").apply(concat_problemas).reset_index(name="Problema_Solução")
 
-# === 5. Exportar ===
+#Ajuste Código+Nome -------------------------||
+df_machines = pd.read_excel("Data/Machines.xlsx")
+
+print(df_machines.columns.tolist())
+
+df_machines["Code"] = df_machines["Code"].astype(str).str.strip()
+df_machines["Name"] = df_machines["Name"].astype(str).str.strip()
+df["Código ATM"] = df["Código ATM"].astype(str).str.strip()
+df = df.merge(df_machines[["Code", "Name"]], left_on="Código ATM", right_on="Code", how="left")
+
+df["ATM Info"] = df["Código ATM"] + " " + df["Name"]
+
+#--------------------------------------------||
+
+
+df_agg = df.groupby("ATM Info").apply(concat_problemas).reset_index(name="Problema_Solução")
+
+#Exporta os dados para um Excel limpo!!
 df_agg.to_excel("CleanReport.xlsx", index=False)
 
 print("✅ Arquivo 'CleanReport.xlsx' gerado com sucesso!")
