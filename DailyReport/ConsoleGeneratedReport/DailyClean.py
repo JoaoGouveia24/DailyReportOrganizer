@@ -1,15 +1,28 @@
 import pandas as pd
+from openpyxl import load_workbook
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
 
-#Leitura di ficheiro 1
+
+ascii_ART = r"""
+.----.   .--.  .-..-. .-.  .-.   .----. .----..----.  .----. .----.  .---. 
+| {}  \ / {} \ | || |  \ \/ /    | {}  }| {_  | {}  }/  {}  \| {}  }{_   _}
+|     //  /\  \| || `--.}  {     | .-. \| {__ | .--' \      /| .-. \  | |  
+`----' `-'  `-'`-'`----'`--'     `-' `-'`----'`-'     `----' `-' `-'  `-'  
+ .---. .----..-. .-..----..----.   .--.  .---.  .----. .----.              
+/   __}| {_  |  `| || {_  | {}  } / {} \{_   _}/  {}  \| {}  }             
+\  {_ }| {__ | |\  || {__ | .-. \/  /\  \ | |  \      /| .-. \             
+ `---' `----'`-' `-'`----'`-' `-'`-'  `-' `-'   `----' `-' `-'             """
+print(ascii_ART)
+
 df = pd.read_csv("report (REPLACE)/report.csv", sep=";", encoding="latin1")
-
 
 #Erros a ignorar
 Erros_Ignorar = ["CIN5505","COU6322","DSP5322","CHQ0004","EID5253","DSP5318","COU0306","COI0014","CHQ0102",
                  "0000000","CHQ0129","0000048","RPR5100","CIN0014","EID5254","CHQ0014","EID5255","BGR5201",
                  "RPR0123","BGR5006","RPR0122","COI5006","0100002","0001011","0000099","EID5252","CHQ0013",
-                 "CHQ0053","DSP5307","DSP0001","CHQ0041","DSP5301","DSP0302","DSP5362","CHQ5611","EID5250"]
-
+                 "CHQ0053","DSP5307","DSP0001","CHQ0041","DSP5301","DSP0302","DSP5362","CHQ5611","EID5250",
+                 "CIN5503","COU0307","CIN5556","CHQ0118","CIN5552","DSP5002","CIN1328"] #Nova linha de erros a analisar!
 #Remove os erros a ignorar
 df = df[~df["HW Anomalia"].isin(Erros_Ignorar)]
 
@@ -97,12 +110,7 @@ def concat_problemas(df_group):
 
     return f"{erro} - {solucao_str}"
 
-
-
-#Ajuste Código+Nome -------------------------||
 df_machines = pd.read_excel("Data/Machines.xlsx")
-
-print(df_machines.columns.tolist())
 
 df_machines["Code"] = df_machines["Code"].astype(str).str.strip()
 df_machines["Name"] = df_machines["Name"].astype(str).str.strip()
@@ -111,12 +119,66 @@ df = df.merge(df_machines[["Code", "Name"]], left_on="Código ATM", right_on="Co
 
 df["ATM Info"] = df["Código ATM"] + " " + df["Name"]
 
-#--------------------------------------------||
-
-
-df_agg = df.groupby("ATM Info").apply(concat_problemas).reset_index(name="Problema_Solução")
+df_agg = (
+    df.groupby("ATM Info", group_keys=False)
+      .apply(concat_problemas)
+      .reset_index(name="Problema_Solução")
+)
 
 #Exporta os dados para um Excel limpo!!
 df_agg.to_excel("CleanReport.xlsx", index=False)
 
-print("✅ Arquivo 'CleanReport.xlsx' gerado com sucesso!")
+import re
+
+ficheiro_excel = "report (REPLACE)/Report_Day.xlsx"
+wb = load_workbook(ficheiro_excel)
+ws = wb.active  # usa a folha ativa
+
+COL_NOME = 2     # Coluna B
+COL_ACTION = 26  # Coluna Z
+COL_Own = 25
+COL_Tic = 24
+COL_Cate = 23
+LINHA_INICIO = 5
+
+mapa_action = {}
+
+for _, row in df_agg.iterrows():
+
+    match = re.match(r"(\d+)", row["ATM Info"])
+    if match:
+        codigo = match.group(1)
+        mapa_action[codigo] = row["Problema_Solução"]
+
+linha = LINHA_INICIO
+MAX_LINHAS_VAZIAS = 150
+linhas_vazias = 0
+
+while linha <= ws.max_row and linhas_vazias < MAX_LINHAS_VAZIAS:
+    valor_b = ws.cell(row=linha, column=COL_NOME).value
+
+    if not valor_b:
+        linhas_vazias += 1
+        linha += 1
+        continue
+
+    linhas_vazias = 0
+    valor_b = str(valor_b)
+
+    match = re.match(r"(\d+)", valor_b)
+    if match:
+        codigo_excel = match.group(1)
+        action = mapa_action.get(codigo_excel, "")
+
+        if action:
+            ws.cell(row=linha, column=23).value = "BRANCH"
+            ws.cell(row=linha, column=24).value = "###"
+            ws.cell(row=linha, column=25).value = "NOVOBANCO"
+            ws.cell(row=linha, column=26).value = action
+
+    linha += 1
+
+wb.save(ficheiro_excel)
+
+print("Done!")
+input("Pressione Enter para sair...")
