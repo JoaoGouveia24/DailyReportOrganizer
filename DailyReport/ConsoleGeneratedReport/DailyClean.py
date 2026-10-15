@@ -18,13 +18,11 @@ print(ascii_ART)
 df = pd.read_csv("report (REPLACE)/report.csv", sep=";", encoding="latin1")
 
 #Erros a ignorar
-Erros_Ignorar = ["CIN5505","COU6322","DSP5322","CHQ0004","EID5253","DSP5318","COU0306","COI0014","CHQ0102",
-                 "0000000","CHQ0129","0000048","RPR5100","CIN0014","EID5254","CHQ0014","EID5255","BGR5201",
-                 "RPR0123","BGR5006","RPR0122","COI5006","0100002","0001011","0000099","EID5252","CHQ0013",
-                 "CHQ0053","DSP5307","DSP0001","CHQ0041","DSP5301","DSP0302","DSP5362","CHQ5611","EID5250",
-                 "CIN5503","COU0307","CIN5556","CHQ0118","CIN5552","DSP5002","CIN1328"] #Nova linha de erros a analisar!
+df_Errors = pd.read_excel("Data/Data.xlsx", sheet_name="Erros")
+df_Errors["ErroCode"] = df_Errors["ErroCode"].astype(str).str.strip()
+
 #Remove os erros a ignorar
-df = df[~df["HW Anomalia"].isin(Erros_Ignorar)]
+df = df[~df["HW Anomalia"].isin(df_Errors["ErroCode"])]
 
 #Mapa de substituições
 ProblemWanted = {
@@ -49,7 +47,8 @@ ProblemWanted = {
         "DSP5304": "Porta do cofre aberta",
         "CIN5010": "Máquina parada até término da operação do operador",
         "BGR5202": "Gaveta de cartões capturados cheia",
-        "BGR0200": "Cartão encravado"
+        "BGR0200": "Cartão encravado",
+        "COU5006": "Erro no módulo de moedas"
     },
 
     "Solução": {
@@ -73,7 +72,8 @@ ProblemWanted = {
         "CIN5501": "Verificar a máquina",
         "CIN5010": "Verificar a máquina",
         "BGR5202": "Verificar a máquina",
-        "BGR0200": "Verificar a máquina"
+        "BGR0200": "Verificar a máquina",
+        "COU5006": "Verificar a máquina"
     }
 }
 
@@ -110,12 +110,12 @@ def concat_problemas(df_group):
 
     return f"{erro} - {solucao_str}"
 
-df_machines = pd.read_excel("Data/Machines.xlsx")
+df_Machines = pd.read_excel("Data/Data.xlsx", sheet_name="Machines")
 
-df_machines["Code"] = df_machines["Code"].astype(str).str.strip()
-df_machines["Name"] = df_machines["Name"].astype(str).str.strip()
+df_Machines["Code"] = df_Machines["Code"].astype(str).str.strip()
+df_Machines["Name"] = df_Machines["Name"].astype(str).str.strip()
 df["Código ATM"] = df["Código ATM"].astype(str).str.strip()
-df = df.merge(df_machines[["Code", "Name"]], left_on="Código ATM", right_on="Code", how="left")
+df = df.merge(df_Machines[["Code", "Name"]], left_on="Código ATM", right_on="Code", how="left")
 
 df["ATM Info"] = df["Código ATM"] + " " + df["Name"]
 
