@@ -18,7 +18,7 @@ print(ascii_ART)
 df = pd.read_csv("report (REPLACE)/report.csv", sep=";", encoding="latin1")
 
 #Erros a ignorar
-df_Errors = pd.read_excel("Data/Data.xlsx", sheet_name="Erros")
+df_Errors = pd.read_excel("Data/Data.xlsx", sheet_name="Errors")
 df_Errors["ErroCode"] = df_Errors["ErroCode"].astype(str).str.strip()
 
 #Remove os erros a ignorar
@@ -114,6 +114,26 @@ df_Machines = pd.read_excel("Data/Data.xlsx", sheet_name="Machines")
 
 df_Machines["Code"] = df_Machines["Code"].astype(str).str.strip()
 df_Machines["Name"] = df_Machines["Name"].astype(str).str.strip()
+mapa_tecnic = {}
+try:
+    df_Tecnic = pd.read_excel("Data/Data.xlsx", sheet_name="Tecnic", dtype=str).fillna("")
+    for col in df_Tecnic.columns:
+        df_Tecnic[col] = df_Tecnic[col].str.strip()
+
+    # Se o ID estiver vazio, descobre-o pelo nome da máquina
+    nome_para_code = dict(zip(df_Machines["Name"], df_Machines["Code"]))
+    if "ID" not in df_Tecnic.columns:
+        df_Tecnic["ID"] = ""
+    df_Tecnic["ID"] = df_Tecnic.apply(
+        lambda r: r["ID"] if r["ID"] else nome_para_code.get(r["Machine"], ""), axis=1)
+
+    for codigo, grupo in df_Tecnic[df_Tecnic["ID"] != ""].groupby("ID"):
+        anomalias = [a for a in grupo["Anomaly"].drop_duplicates() if a]
+        owner = grupo["Owner"].iloc[0]
+        mapa_tecnic[codigo] = (owner, " & ".join(anomalias))
+except ValueError:
+    print("Aviso: folha 'Tecnic' não encontrada, a ignorar pedidos técnicos.")
+
 df["Código ATM"] = df["Código ATM"].astype(str).str.strip()
 df = df.merge(df_Machines[["Code", "Name"]], left_on="Código ATM", right_on="Code", how="left")
 
@@ -169,12 +189,20 @@ while linha <= ws.max_row and linhas_vazias < MAX_LINHAS_VAZIAS:
     if match:
         codigo_excel = match.group(1)
         action = mapa_action.get(codigo_excel, "")
+        tecnico = mapa_tecnic.get(codigo_excel)
 
-        if action:
-            ws.cell(row=linha, column=23).value = "BRANCH"
-            ws.cell(row=linha, column=24).value = "###"
-            ws.cell(row=linha, column=25).value = "NOVOBANCO"
-            ws.cell(row=linha, column=26).value = action
+        if tecnico:  # prioridade ao pedido técnico
+            owner, anomalia = tecnico
+            ws.cell(row=linha, column=COL_Cate).value = "HW ERROR"
+            ws.cell(row=linha, column=COL_Tic).value = "###"
+            ws.cell(row=linha, column=COL_Own).value = owner
+            ws.cell(row=linha, column=COL_ACTION).value = (
+                f"{anomalia} - Enviar técnico" if anomalia else "Enviar técnico")
+        elif action:  # erro automático do CSV
+            ws.cell(row=linha, column=COL_Cate).value = "BRANCH"
+            ws.cell(row=linha, column=COL_Tic).value = "###"
+            ws.cell(row=linha, column=COL_Own).value = "NOVOBANCO"
+            ws.cell(row=linha, column=COL_ACTION).value = action
 
     linha += 1
 
